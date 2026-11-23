@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>MT8188 RAM, I/O &amp; ART Optimizer</title>
+  <link rel="stylesheet" href="./style.css">
+  <script defer src="./app.js"></script>
+</head>
+<body>
+  <main class="container">
+    <header class="card header">
+      <div class="header-top">
+        <div>
+          <h1>RAM, eMMC I/O &amp; ART Optimizer</h1>
+          <p class="subtitle">MT8188 / 4 GB &bull; ZRAM + Storage + ART Inlining &amp; USAP</p>
+        </div>
+        <div class="badges">
+          <span id="ver-badge" class="pill pill-neutral">v1.0</span>
+          <span id="status-pill" class="pill pill-neutral">Loading...</span>
+        </div>
+      </div>
+      <div id="demo-banner" class="banner hidden">
+        Preview mode (<code>window.ksu</code> unavailable). Open via KernelSU, APatch, KsuWebUI, WebUI X, or MMRL to apply settings.
+      </div>
+    </header>
+
+    <section class="card">
+      <div class="section-head">
+        <h2>Live Telemetry</h2>
+        <span id="saved-summary" class="meta">--</span>
+      </div>
+      <dl class="diag-grid">
+        <div class="diag-row">
+          <dt>RAM Available</dt>
+          <dd id="t-ram">--</dd>
+        </div>
+        <div class="diag-row">
+          <dt>ZRAM Live</dt>
+          <dd id="t-zram">--</dd>
+        </div>
+        <div class="diag-row">
+          <dt>PSI Full Stalls</dt>
+          <dd id="t-psi">--</dd>
+        </div>
+        <div class="diag-row">
+          <dt>Storage Queue</dt>
+          <dd id="t-io">--</dd>
+        </div>
+        <div class="diag-row">
+          <dt>VM Writeback</dt>
+          <dd id="t-vm">--</dd>
+        </div>
+        <div class="diag-row">
+          <dt>ART &amp; USAP</dt>
+          <dd id="t-art">--</dd>
+        </div>
+      </dl>
+    </section>
+
+    <section class="card">
+      <div class="section-head">
+        <h2>Presets</h2>
+        <span id="preset-label" class="meta">Custom</span>
+      </div>
+      <div class="preset-grid" id="preset-grid">
+        <button type="button" class="preset-btn" data-preset="multitasking">
+          <span class="preset-name">Multitasking</span>
+          <span class="preset-desc">zstd 75% &bull; responsive &bull; kyber &bull; ART+USAP</span>
+        </button>
+        <button type="button" class="preset-btn" data-preset="lowlatency">
+          <span class="preset-name">Low Latency</span>
+          <span class="preset-desc">lz4 75% &bull; responsive &bull; none/64KB &bull; ART+USAP</span>
+        </button>
+        <button type="button" class="preset-btn" data-preset="maxcap">
+          <span class="preset-name">Max Capacity</span>
+          <span class="preset-desc">zstd 100% &bull; aggressive &bull; kyber &bull; ART+USAP</span>
+        </button>
+        <button type="button" class="preset-btn" data-preset="stock">
+          <span class="preset-name">Stock</span>
+          <span class="preset-desc">lz4 50% &bull; stock VM &bull; mq-deadline &bull; Stock ART</span>
+        </button>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="section-head">
+        <h2>ZRAM Swap</h2>
+        <span class="meta">Applies at boot or live when safe</span>
+      </div>
+      <div class="control-group">
+        <div class="control-head">
+          <span class="control-title">Compression Algorithm</span>
+          <span id="algo-note" class="readout">zstd (higher ratio)</span>
+        </div>
+        <div class="seg-group seg-2" id="algo-group" role="group" aria-label="ZRAM algorithm">
+          <button type="button" class="seg-btn" data-algo="zstd">zstd</button>
+          <button type="button" class="seg-btn" data-algo="lz4">lz4</button>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <div class="control-head">
+          <span class="control-title">ZRAM Capacity (% of RAM)</span>
+          <span id="pct-note" class="readout">75% (~2.8 GB)</span>
+        </div>
+        <div class="seg-group seg-3" id="pct-group" role="group" aria-label="ZRAM size">
+          <button type="button" class="seg-btn" data-pct="50">50%</button>
+          <button type="button" class="seg-btn" data-pct="75">75%</button>
+          <button type="button" class="seg-btn" data-pct="100">100%</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="section-head">
+        <h2>VM &amp; eMMC I/O</h2>
+        <span class="meta">Applies immediately</span>
+      </div>
+      <div class="control-group">
+        <div class="control-head">
+          <span class="control-title">VM Writeback &amp; Reclaim</span>
+          <span id="vm-note" class="readout">16/64 MB dirty cap &bull; vfs=55</span>
+        </div>
+        <div class="seg-group seg-3" id="vm-group" role="group" aria-label="VM profile">
+          <button type="button" class="seg-btn" data-vm="stock">Stock</button>
+          <button type="button" class="seg-btn" data-vm="responsive">Responsive</button>
+          <button type="button" class="seg-btn" data-vm="aggressive">Aggressive</button>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <div class="control-head">
+          <span class="control-title">I/O Scheduler</span>
+          <span id="sched-note" class="readout">kyber (low latency)</span>
+        </div>
+        <div class="seg-group seg-3" id="sched-group" role="group" aria-label="I/O scheduler">
+          <button type="button" class="seg-btn" data-sched="kyber">kyber</button>
+          <button type="button" class="seg-btn" data-sched="mq-deadline">mq-deadline</button>
+          <button type="button" class="seg-btn" data-sched="none">none</button>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <div class="control-head">
+          <span class="control-title">Read-Ahead</span>
+          <span class="meta">KB</span>
+        </div>
+        <div class="seg-group seg-3" id="ra-group" role="group" aria-label="Read ahead KB">
+          <button type="button" class="seg-btn" data-ra="64">64 KB</button>
+          <button type="button" class="seg-btn" data-ra="128">128 KB</button>
+          <button type="button" class="seg-btn" data-ra="256">256 KB</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="section-head">
+        <h2>ART &amp; App Launch</h2>
+        <span class="meta">Takes effect after reboot</span>
+      </div>
+      <div class="control-group">
+        <div class="control-head">
+          <span class="control-title">ART Method Inlining</span>
+          <span id="art-note" class="readout">--inline-max-code-units=32</span>
+        </div>
+        <div class="seg-group seg-2" id="art-group" role="group" aria-label="ART inlining">
+          <button type="button" class="seg-btn" data-art="enabled">Enabled (32)</button>
+          <button type="button" class="seg-btn" data-art="stock">Stock (0)</button>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <div class="control-head">
+          <span class="control-title">USAP Pre-forked Zygote Pool</span>
+          <span id="usap-note" class="readout">max 2 warm workers</span>
+        </div>
+        <div class="seg-group seg-2" id="usap-group" role="group" aria-label="USAP pool">
+          <button type="button" class="seg-btn" data-usap="enabled">Enabled</button>
+          <button type="button" class="seg-btn" data-usap="stock">Stock (OFF)</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="actions">
+      <button type="button" id="btn-apply" class="btn btn-primary">Apply Settings</button>
+      <div class="action-row-3">
+        <button type="button" id="btn-compact" class="btn btn-secondary">Compact ZRAM</button>
+        <button type="button" id="btn-dexopt" class="btn btn-secondary">Optimize Apps</button>
+        <button type="button" id="btn-refresh" class="btn btn-secondary">Refresh</button>
+      </div>
+      <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+    </section>
+  </main>
+</body>
+</html>

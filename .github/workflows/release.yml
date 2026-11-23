@@ -1,0 +1,104 @@
+name: Release Magisk Module
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Parse and validate module.prop
+        run: |
+          set -euo pipefail
+          MOD_ID=$(sed -n 's/^id=//p' module.prop | head -n 1 | tr -d '\r')
+          MOD_VER=$(sed -n 's/^version=//p' module.prop | head -n 1 | tr -d '\r')
+          MOD_CODE=$(sed -n 's/^versionCode=//p' module.prop | head -n 1 | tr -d '\r')
+
+          if [ -z "$MOD_ID" ] || [ -z "$MOD_VER" ] || [ -z "$MOD_CODE" ]; then
+            echo "Error: missing id, version, or versionCode in module.prop" >&2
+            exit 1
+          fi
+
+          if ! echo "$MOD_CODE" | grep -Eq '^[0-9]+$'; then
+            echo "Error: versionCode must be numeric (got: $MOD_CODE)" >&2
+            exit 1
+          fi
+
+          if [ "${{ github.ref_type }}" = "tag" ] && [ "${{ github.ref_name }}" != "$MOD_VER" ]; then
+            echo "Error: tag (${{ github.ref_name }}) does not match module.prop version ($MOD_VER)" >&2
+            exit 1
+          fi
+
+          echo "MOD_ID=$MOD_ID" >> "$GITHUB_ENV"
+          echo "MOD_VER=$MOD_VER" >> "$GITHUB_ENV"
+          echo "MOD_CODE=$MOD_CODE" >> "$GITHUB_ENV"
+          echo "ZIP_PATH=dist/${MOD_ID}-${MOD_VER}.zip" >> "$GITHUB_ENV"
+
+      - name: Build module zip
+        run: |
+          set -euo pipefail
+          ./build.sh
+          test -f "$ZIP_PATH"
+
+      - name: Publish or update GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "$MOD_VER" >/dev/null 2>&1; then
+            gh release upload "$MOD_VER" "$ZIP_PATH" --clobber
+          else
+            gh release create "$MOD_VER" "$ZIP_PATH" \
+              --title "${MOD_VER} - MT8188 RAM, eMMC I/O & ART Optimizer" \
+              --notes-file CHANGELOG.md
+          fi
+
+      - name: Update update.json on main
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git checkout main
+          git pull --ff-only origin main
+
+          python3 - << 'PYEOF'
+          import json, os
+
+          repo = os.environ["REPO"]
+          mod_id = os.environ["MOD_ID"]
+          mod_ver = os.environ["MOD_VER"]
+          mod_code = int(os.environ["MOD_CODE"])
+
+          data = {
+              "version": mod_ver,
+              "versionCode": mod_code,
+              "zipUrl": f"https://github.com/{repo}/releases/download/{mod_ver}/{mod_id}-{mod_ver}.zip",
+              "changelog": f"https://raw.githubusercontent.com/{repo}/main/CHANGELOG.md",
+          }
+
+          with open("update.json", "w", encoding="utf-8", newline="\n") as f:
+              json.dump(data, f, indent=2)
+              f.write("\n")
+          PYEOF
+
+          if git diff --quiet update.json; then
+            echo "update.json already up to date."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add update.json
+            git commit -m "chore: update update.json for ${MOD_VER} [skip ci]"
+            git push origin main
+          fi

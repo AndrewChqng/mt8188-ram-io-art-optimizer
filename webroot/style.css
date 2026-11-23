@@ -1,0 +1,312 @@
+@import "https://mui.kernelsu.org/internal/insets.css";
+@import "https://mui.kernelsu.org/internal/colors.css";
+
+:root {
+  --bg: var(--background, #f6f6fa);
+  --card: var(--surfaceContainerLow, #ffffff);
+  --card-alt: var(--surfaceContainer, #eef0f6);
+  --text: var(--onSurface, #181a20);
+  --muted: var(--onSurfaceVariant, #5a6070);
+  --accent: var(--primary, #3b63d1);
+  --on-accent: var(--onPrimary, #ffffff);
+  --accent-soft: var(--primaryContainer, #dbe4ff);
+  --on-accent-soft: var(--onPrimaryContainer, #16337a);
+  --border: var(--outlineVariant, #d6dae6);
+  --ok-bg: #dcfce7;
+  --ok-fg: #166534;
+  --warn-bg: #fef3c7;
+  --warn-fg: #92400e;
+  --err-bg: #fee2e2;
+  --err-fg: #991b1b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: var(--background, #111318);
+    --card: var(--surfaceContainerLow, #1b1e26);
+    --card-alt: var(--surfaceContainer, #242834);
+    --text: var(--onSurface, #eceef4);
+    --muted: var(--onSurfaceVariant, #9da4b6);
+    --accent: var(--primary, #9db8ff);
+    --on-accent: var(--onPrimary, #0d2666);
+    --accent-soft: var(--primaryContainer, #233c80);
+    --on-accent-soft: var(--onPrimaryContainer, #dbe4ff);
+    --border: var(--outlineVariant, #2e3444);
+    --ok-bg: #143522;
+    --ok-fg: #86efac;
+    --warn-bg: #3b2a10;
+    --warn-fg: #fcd34d;
+    --err-bg: #3f1719;
+    --err-fg: #fca5a5;
+  }
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.container {
+  max-width: 680px;
+  margin: 0 auto;
+  padding:
+    max(16px, var(--window-inset-top, env(safe-area-inset-top, 16px)))
+    14px
+    max(24px, var(--window-inset-bottom, env(safe-area-inset-bottom, 24px)));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+h2 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.subtitle {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.pill {
+  font-size: 0.74rem;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.pill-neutral { background: var(--card-alt); color: var(--text); }
+.pill-ok { background: var(--ok-bg); color: var(--ok-fg); }
+.pill-warn { background: var(--warn-bg); color: var(--warn-fg); }
+
+.banner {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--warn-bg);
+  color: var(--warn-fg);
+  font-size: 0.8rem;
+}
+
+.section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.meta {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.diag-grid {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
+}
+
+.diag-row {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.diag-row dt {
+  font-size: 0.73rem;
+  color: var(--muted);
+}
+
+.diag-row dd {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  word-break: break-word;
+}
+
+.preset-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.preset-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 10px 11px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--card-alt);
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.preset-btn.active {
+  background: var(--accent-soft);
+  color: var(--on-accent-soft);
+  border-color: var(--accent);
+}
+
+.preset-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.preset-desc {
+  font-size: 0.72rem;
+  opacity: 0.85;
+}
+
+.control-group + .control-group {
+  margin-top: 13px;
+}
+
+.control-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 7px;
+}
+
+.control-title {
+  font-weight: 500;
+  font-size: 0.86rem;
+}
+
+.readout {
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.seg-group {
+  display: grid;
+  gap: 6px;
+}
+
+.seg-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.seg-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+.seg-btn {
+  padding: 9px 6px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--card-alt);
+  color: var(--text);
+  font-weight: 600;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.seg-btn.active {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.action-row-3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.btn {
+  border: 1px solid transparent;
+  border-radius: 11px;
+  padding: 11px 10px;
+  font-weight: 600;
+  font-size: 0.86rem;
+  cursor: pointer;
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.btn-primary.pending {
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.btn-secondary {
+  background: var(--card);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.toast {
+  padding: 9px 12px;
+  border-radius: 10px;
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+.toast.ok { background: var(--ok-bg); color: var(--ok-fg); }
+.toast.warn { background: var(--warn-bg); color: var(--warn-fg); }
+.toast.err { background: var(--err-bg); color: var(--err-fg); }
+
+.hidden { display: none; }
+
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+}

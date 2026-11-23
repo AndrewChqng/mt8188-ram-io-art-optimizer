@@ -1,0 +1,4 @@
+dalvik.vm.dex2oat-flags=--inline-max-code-units=32
+dalvik.vm.usap_pool_enabled=true
+dalvik.vm.usap_pool_size_max=2
+dalvik.vm.usap_pool_size_min=1

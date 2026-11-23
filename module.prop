@@ -1,0 +1,7 @@
+id=MT8188RamIoArtOptimizer
+name=MT8188 RAM, eMMC I/O & ART Optimizer
+version=v1.0
+versionCode=100
+author=Antigravity AI
+description=Optimizes ZRAM (zstd/lz4 & sizing), eMMC I/O queue, VM writeback, ART method inlining, and USAP app launch pool on MT8188/4GB devices, with WebUI and volume-key controls.
+updateJson=https://raw.githubusercontent.com/AndrewChqng/mt8188-ram-io-art-optimizer/main/update.json
