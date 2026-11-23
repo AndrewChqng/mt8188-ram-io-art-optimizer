@@ -17,12 +17,12 @@ A systemless **Magisk / KernelSU / APatch** optimization module with an offline 
 | Area | Mechanism | Applies |
 | :--- | :--- | :--- |
 | **ZRAM Swap** (`post-fs-data.sh`) | Configures `/dev/block/zram0` compression (`zstd` / `lz4`) and size (`50%` / `75%` / `100%` RAM) before Android services fill swap, with swap-usage safety checks and automatic `lz4` fallback | At boot (or live via Action/WebUI if safe) |
-| **VM Writeback & Reclaim** (`service.sh`) | Caps writeback bursts (`16/64 MB` or `12/48 MB` `dirty_background_bytes` / `dirty_bytes`), tunes `vfs_cache_pressure` (`55`/`45`), raises `watermark_scale_factor` (`25`/`40`), enforces `page-cluster=0` | **Live immediately** |
-| **eMMC I/O Queue** (`service.sh`) | Tunes `/sys/block/mmcblk0/queue` scheduler (`kyber` / `none` / `mq-deadline`), `read_ahead_kb` (`64` / `128` / `256`), `iostats=0`, `add_random=0`, `rq_affinity=2` | **Live immediately** |
-| **ART & Zygote** (`system.prop`) | Sets `dalvik.vm.dex2oat-flags=--inline-max-code-units=32` and `dalvik.vm.usap_pool_enabled=true` (`usap_pool_size_max=2`, `min=1`) | **At boot** |
+| **VM Writeback & Swappiness** (`service.sh`) | Caps writeback bursts (`16/64 MB` or `12/48 MB` `dirty_background_bytes` / `dirty_bytes`), tunes `vfs_cache_pressure` (`55`/`45`), `watermark_scale_factor` (`25`/`40`), `swappiness` (`100`/`130`/`160`), and `page-cluster=0` | **Live immediately** |
+| **eMMC I/O Queue** (`service.sh`) | Tunes `/sys/block/mmcblk0/queue` scheduler (`kyber` / `none` / `mq-deadline`), `read_ahead_kb` (`64` / `128` / `256`), `iostats=0`, `add_random=0`, `rq_affinity=2`, plus on-demand `fstrim` | **Live immediately** |
+| **ART, USAP & LMKD** (`system.prop`) | Sets `dalvik.vm.dex2oat-flags=--inline-max-code-units=32` (auto-skipped if Vector/LSPosed Xposed is active), `dalvik.vm.usap_pool_enabled=true` (`max=2`, `min=1`), and `ro.lmk.*` multitasking props | **At boot** |
 
 > [!NOTE]
-> Designed to complement **Frosty** without fighting its settings (Frosty's stock `user_prefs` keeps kernel/RAM tweaks off; even if enabled, this module owns ZRAM sizing/`zstd`, `dirty_bytes`, scheduler selection, `iostats`, ART inlining, and USAP).
+> Designed to complement **Frosty** and **Vector / LSPosed** cleanly: Frosty's stock `user_prefs` keeps kernel/RAM tweaks off, and if `zygisk_vector` / `zygisk_lsposed` / `riru_lsposed` is active, this module automatically preserves Xposed's `--inline-max-code-units=0` flag so method hooks are never broken.
 
 ---
 
@@ -30,19 +30,19 @@ A systemless **Magisk / KernelSU / APatch** optimization module with an offline 
 
 Configure via **Volume Up** (`Next`) / **Volume Down** (`Confirm`) during installation (`customize.sh`) or via the **WebUI** / **Action button** (`action.sh`) after boot:
 
-| Preset | ZRAM | VM Writeback | Storage Queue | ART Inline | USAP Pool |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Multitasking** *(default)* | `zstd` @ `75%` | `responsive` (`16/64 MB`, `vfs=55`, `wm=25`) | `kyber` / `128 KB` | `enabled` (`32`) | `enabled` (`max 2`) |
-| **Low Latency** | `lz4` @ `75%` | `responsive` (`16/64 MB`, `vfs=55`, `wm=25`) | `none` / `64 KB` | `enabled` (`32`) | `enabled` (`max 2`) |
-| **Max Capacity** | `zstd` @ `100%` | `aggressive` (`12/48 MB`, `vfs=45`, `wm=40`) | `kyber` / `128 KB` | `enabled` (`32`) | `enabled` (`max 2`) |
-| **Stock** | `lz4` @ `50%` | `stock` (`10%/20%`, `vfs=100`, `wm=10`) | `mq-deadline` / `128 KB` | `stock` (`0`) | `stock` (`false`) |
+| Preset | ZRAM | VM & Swappiness | Storage Queue | ART / USAP / LMKD |
+| :--- | :--- | :--- | :--- | :--- |
+| **Multitasking** *(default)* | `zstd` @ `75%` | `responsive`, `sw=130` | `kyber` / `128 KB` | `enabled` *(ART auto)* |
+| **Low Latency** | `lz4` @ `75%` | `responsive`, `sw=100` | `none` / `64 KB` | `enabled` *(ART auto)* |
+| **Max Capacity** | `zstd` @ `100%` | `aggressive`, `sw=160` | `kyber` / `128 KB` | `enabled` *(ART auto)* |
+| **Stock** | `lz4` @ `50%` | `stock`, `sw=100` | `mq-deadline` / `128 KB` | `stock` |
 
 ### WebUI (`webroot/`)
 
 Open directly in **KernelSU**, **APatch**, **KsuWebUIStandalone**, **MMRL**, or **WebUI X** (or select **Open WebUI** from the Magisk **Action** volume-key menu):
 
-- View live **RAM**, **ZRAM ratio & usage**, **Memory/I/O PSI stalls**, **eMMC queue**, and **ART/USAP** state.
-- Apply presets or individual sliders/toggles, compact ZRAM on demand, or trigger `cmd package bg-dexopt-job` so installed apps re-optimize with method inlining enabled.
+- View live **RAM**, **ZRAM ratio & usage**, **Memory/I/O PSI stalls**, **eMMC queue**, **Swappiness**, **LMKD**, and **ART/USAP** state, plus exact pending-reboot reasons with a two-step **Reboot Now** button.
+- Apply presets or individual toggles, **Compact ZRAM**, **Trim eMMC (`/data` & `/cache`)**, or trigger **`bg-dexopt-job`**.
 
 ### ADB CLI Reference
 
@@ -53,11 +53,12 @@ adb shell "su -c 'sh /data/adb/modules/MT8188RamIoArtOptimizer/action.sh --statu
 # Apply a preset
 adb shell "su -c 'sh /data/adb/modules/MT8188RamIoArtOptimizer/action.sh --preset lowlatency'"
 
-# Apply explicit custom parameters: <algo> <pct> <vm> <sched> <ra_kb> <art> <usap>
-adb shell "su -c 'sh /data/adb/modules/MT8188RamIoArtOptimizer/action.sh --set zstd 75 responsive kyber 128 enabled enabled'"
+# Apply explicit custom parameters: <algo> <pct> <vm> <swappiness> <sched> <ra_kb> <art> <usap> <lmkd>
+adb shell "su -c 'sh /data/adb/modules/MT8188RamIoArtOptimizer/action.sh --set zstd 75 responsive 130 kyber 128 enabled enabled enabled'"
 
-# Trigger ZRAM compaction or background ART dexopt
+# Maintenance actions
 adb shell "su -c 'sh /data/adb/modules/MT8188RamIoArtOptimizer/action.sh --compact'"
+adb shell "su -c 'sh /data/adb/modules/MT8188RamIoArtOptimizer/action.sh --fstrim'"
 adb shell "su -c 'sh /data/adb/modules/MT8188RamIoArtOptimizer/action.sh --dexopt'"
 ```
 
@@ -65,7 +66,7 @@ adb shell "su -c 'sh /data/adb/modules/MT8188RamIoArtOptimizer/action.sh --dexop
 
 ## Installation & Building
 
-1. Download **`MT8188RamIoArtOptimizer-v1.0.zip`** from **[GitHub Releases](https://github.com/AndrewChqng/mt8188-ram-io-art-optimizer/releases)** (or build with `./build.sh`).
+1. Download **`MT8188RamIoArtOptimizer-v1.1.zip`** from **[GitHub Releases](https://github.com/AndrewChqng/mt8188-ram-io-art-optimizer/releases)** (or build with `./build.sh`).
 2. Flash in **Magisk** (v20.4+), **KernelSU**, or **APatch**, select your preset via **Volume Up / Down** (or wait 15s for **Multitasking**), and reboot.
 3. Auto-updates are supported natively via `updateJson` ([`update.json`](update.json) + [`CHANGELOG.md`](CHANGELOG.md)).
 

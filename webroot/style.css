@@ -128,6 +128,42 @@ h2 {
   font-size: 0.8rem;
 }
 
+.reboot-banner {
+  margin-top: 10px;
+  padding: 9px 11px;
+  border-radius: 10px;
+  background: var(--warn-bg);
+  color: var(--warn-fg);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.8rem;
+}
+
+.reboot-text {
+  min-width: 0;
+  word-break: break-word;
+}
+
+.btn-reboot {
+  flex-shrink: 0;
+  padding: 7px 11px;
+  border-radius: 8px;
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  font-weight: 700;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.btn-reboot.confirm {
+  background: var(--err-bg);
+  color: var(--err-fg);
+  border-color: var(--err-fg);
+}
+
 .section-head {
   display: flex;
   justify-content: space-between;
@@ -227,6 +263,11 @@ h2 {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
+.xposed-note {
+  margin: 6px 0 0;
+  color: var(--warn-fg);
+}
+
 .seg-group {
   display: grid;
   gap: 6px;
@@ -252,15 +293,20 @@ h2 {
   border-color: var(--accent);
 }
 
+.seg-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .actions {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.action-row-3 {
+.action-grid-4 {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 

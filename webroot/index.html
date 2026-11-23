@@ -13,12 +13,18 @@
       <div class="header-top">
         <div>
           <h1>RAM, eMMC I/O &amp; ART Optimizer</h1>
-          <p class="subtitle">MT8188 / 4 GB &bull; ZRAM + Storage + ART Inlining &amp; USAP</p>
+          <p class="subtitle">MT8188 / 4 GB &bull; ZRAM + Storage + LMKD + USAP</p>
         </div>
         <div class="badges">
-          <span id="ver-badge" class="pill pill-neutral">v1.0</span>
+          <span id="ver-badge" class="pill pill-neutral">v1.1</span>
           <span id="status-pill" class="pill pill-neutral">Loading...</span>
         </div>
+      </div>
+      <div id="reboot-banner" class="reboot-banner hidden">
+        <div class="reboot-text">
+          <strong>Reboot pending:</strong> <span id="pending-reasons">--</span>
+        </div>
+        <button type="button" id="btn-reboot" class="btn-reboot">Reboot Now</button>
       </div>
       <div id="demo-banner" class="banner hidden">
         Preview mode (<code>window.ksu</code> unavailable). Open via KernelSU, APatch, KsuWebUI, WebUI X, or MMRL to apply settings.
@@ -48,11 +54,11 @@
           <dd id="t-io">--</dd>
         </div>
         <div class="diag-row">
-          <dt>VM Writeback</dt>
+          <dt>VM &amp; Swappiness</dt>
           <dd id="t-vm">--</dd>
         </div>
         <div class="diag-row">
-          <dt>ART &amp; USAP</dt>
+          <dt>ART, USAP &amp; LMKD</dt>
           <dd id="t-art">--</dd>
         </div>
       </dl>
@@ -66,19 +72,19 @@
       <div class="preset-grid" id="preset-grid">
         <button type="button" class="preset-btn" data-preset="multitasking">
           <span class="preset-name">Multitasking</span>
-          <span class="preset-desc">zstd 75% &bull; responsive &bull; kyber &bull; ART+USAP</span>
+          <span class="preset-desc">zstd 75% &bull; sw=130 &bull; kyber &bull; LMKD+USAP</span>
         </button>
         <button type="button" class="preset-btn" data-preset="lowlatency">
           <span class="preset-name">Low Latency</span>
-          <span class="preset-desc">lz4 75% &bull; responsive &bull; none/64KB &bull; ART+USAP</span>
+          <span class="preset-desc">lz4 75% &bull; sw=100 &bull; none/64KB &bull; LMKD+USAP</span>
         </button>
         <button type="button" class="preset-btn" data-preset="maxcap">
           <span class="preset-name">Max Capacity</span>
-          <span class="preset-desc">zstd 100% &bull; aggressive &bull; kyber &bull; ART+USAP</span>
+          <span class="preset-desc">zstd 100% &bull; sw=160 &bull; kyber &bull; LMKD+USAP</span>
         </button>
         <button type="button" class="preset-btn" data-preset="stock">
           <span class="preset-name">Stock</span>
-          <span class="preset-desc">lz4 50% &bull; stock VM &bull; mq-deadline &bull; Stock ART</span>
+          <span class="preset-desc">lz4 50% &bull; sw=100 &bull; mq-deadline &bull; Stock</span>
         </button>
       </div>
     </section>
@@ -131,6 +137,18 @@
 
       <div class="control-group">
         <div class="control-head">
+          <span class="control-title">VM Swappiness</span>
+          <span id="swap-note" class="readout">130 (prefer zstd ZRAM)</span>
+        </div>
+        <div class="seg-group seg-3" id="swap-group" role="group" aria-label="VM swappiness">
+          <button type="button" class="seg-btn" data-swap="100">100</button>
+          <button type="button" class="seg-btn" data-swap="130">130</button>
+          <button type="button" class="seg-btn" data-swap="160">160</button>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <div class="control-head">
           <span class="control-title">I/O Scheduler</span>
           <span id="sched-note" class="readout">kyber (low latency)</span>
         </div>
@@ -156,7 +174,7 @@
 
     <section class="card">
       <div class="section-head">
-        <h2>ART &amp; App Launch</h2>
+        <h2>ART, Launch &amp; LMKD</h2>
         <span class="meta">Takes effect after reboot</span>
       </div>
       <div class="control-group">
@@ -168,6 +186,7 @@
           <button type="button" class="seg-btn" data-art="enabled">Enabled (32)</button>
           <button type="button" class="seg-btn" data-art="stock">Stock (0)</button>
         </div>
+        <p id="art-xposed-note" class="readout xposed-note hidden"></p>
       </div>
 
       <div class="control-group">
@@ -180,12 +199,24 @@
           <button type="button" class="seg-btn" data-usap="stock">Stock (OFF)</button>
         </div>
       </div>
+
+      <div class="control-group">
+        <div class="control-head">
+          <span class="control-title">LMKD Multitasking Tuning</span>
+          <span id="lmkd-note" class="readout">swap_free_low=5% &bull; ratio aware</span>
+        </div>
+        <div class="seg-group seg-2" id="lmkd-group" role="group" aria-label="LMKD tuning">
+          <button type="button" class="seg-btn" data-lmkd="enabled">Enabled</button>
+          <button type="button" class="seg-btn" data-lmkd="stock">Stock</button>
+        </div>
+      </div>
     </section>
 
     <section class="actions">
       <button type="button" id="btn-apply" class="btn btn-primary">Apply Settings</button>
-      <div class="action-row-3">
+      <div class="action-grid-4">
         <button type="button" id="btn-compact" class="btn btn-secondary">Compact ZRAM</button>
+        <button type="button" id="btn-fstrim" class="btn btn-secondary">Trim eMMC</button>
         <button type="button" id="btn-dexopt" class="btn btn-secondary">Optimize Apps</button>
         <button type="button" id="btn-refresh" class="btn btn-secondary">Refresh</button>
       </div>

@@ -1,5 +1,5 @@
 #!/system/bin/sh
-# Shared configuration, ZRAM/VM/eMMC/ART appliers, and volume-key UI for MT8188RamIoArtOptimizer.
+# Shared configuration, ZRAM/VM/eMMC/ART/LMKD appliers, and volume-key UI for MT8188RamIoArtOptimizer.
 
 print_msg() {
   if command -v ui_print >/dev/null 2>&1; then
@@ -13,10 +13,12 @@ set_default_config() {
   ZRAM_ALGO="zstd"
   ZRAM_SIZE_PCT=75
   VM_PROFILE="responsive"
+  VM_SWAPPINESS=130
   IO_SCHED="kyber"
   IO_READAHEAD_KB=128
   ART_INLINE="enabled"
   USAP_POOL="enabled"
+  LMKD_TUNING="enabled"
 }
 
 sanitize_config() {
@@ -31,6 +33,16 @@ sanitize_config() {
   case "${VM_PROFILE:-}" in
     stock|responsive|aggressive) ;;
     *) VM_PROFILE="responsive" ;;
+  esac
+  case "${VM_SWAPPINESS:-}" in
+    100|130|160) ;;
+    *)
+      case "$VM_PROFILE" in
+        stock) VM_SWAPPINESS=100 ;;
+        aggressive) VM_SWAPPINESS=160 ;;
+        *) VM_SWAPPINESS=130 ;;
+      esac
+      ;;
   esac
   case "${IO_SCHED:-}" in
     kyber|mq-deadline|none) ;;
@@ -48,11 +60,16 @@ sanitize_config() {
     enabled|stock) ;;
     *) USAP_POOL="enabled" ;;
   esac
+  case "${LMKD_TUNING:-}" in
+    enabled|stock) ;;
+    *) LMKD_TUNING="enabled" ;;
+  esac
 }
 
 load_config() {
   local cfg="$1"
   set_default_config
+  VM_SWAPPINESS=""
   if [ -r "$cfg" ]; then
     # shellcheck disable=SC1090
     . "$cfg" 2>/dev/null || true
@@ -67,10 +84,12 @@ save_config() {
 ZRAM_ALGO=$ZRAM_ALGO
 ZRAM_SIZE_PCT=$ZRAM_SIZE_PCT
 VM_PROFILE=$VM_PROFILE
+VM_SWAPPINESS=$VM_SWAPPINESS
 IO_SCHED=$IO_SCHED
 IO_READAHEAD_KB=$IO_READAHEAD_KB
 ART_INLINE=$ART_INLINE
 USAP_POOL=$USAP_POOL
+LMKD_TUNING=$LMKD_TUNING
 EOF
 }
 
@@ -80,37 +99,45 @@ apply_preset() {
       ZRAM_ALGO="zstd"
       ZRAM_SIZE_PCT=75
       VM_PROFILE="responsive"
+      VM_SWAPPINESS=130
       IO_SCHED="kyber"
       IO_READAHEAD_KB=128
       ART_INLINE="enabled"
       USAP_POOL="enabled"
+      LMKD_TUNING="enabled"
       ;;
     lowlatency)
       ZRAM_ALGO="lz4"
       ZRAM_SIZE_PCT=75
       VM_PROFILE="responsive"
+      VM_SWAPPINESS=100
       IO_SCHED="none"
       IO_READAHEAD_KB=64
       ART_INLINE="enabled"
       USAP_POOL="enabled"
+      LMKD_TUNING="enabled"
       ;;
     maxcap)
       ZRAM_ALGO="zstd"
       ZRAM_SIZE_PCT=100
       VM_PROFILE="aggressive"
+      VM_SWAPPINESS=160
       IO_SCHED="kyber"
       IO_READAHEAD_KB=128
       ART_INLINE="enabled"
       USAP_POOL="enabled"
+      LMKD_TUNING="enabled"
       ;;
     stock)
       ZRAM_ALGO="lz4"
       ZRAM_SIZE_PCT=50
       VM_PROFILE="stock"
+      VM_SWAPPINESS=100
       IO_SCHED="mq-deadline"
       IO_READAHEAD_KB=128
       ART_INLINE="stock"
       USAP_POOL="stock"
+      LMKD_TUNING="stock"
       ;;
     *)
       return 1
@@ -119,17 +146,36 @@ apply_preset() {
   return 0
 }
 
+detect_xposed() {
+  local mod_base="${XPOSED_MODULES_DIR:-/data/adb/modules}"
+  local m=""
+  for m in zygisk_vector zygisk_lsposed riru_lsposed; do
+    if [ -d "$mod_base/$m" ] && [ ! -e "$mod_base/$m/disable" ] && [ ! -e "$mod_base/$m/remove" ]; then
+      printf '%s\n' "$m"
+      return 0
+    fi
+  done
+  return 1
+}
+
 format_config_oneliner() {
-  printf 'ZRAM %s %s%% | VM %s | IO %s/%sKB | ART %s | USAP %s' \
-    "$ZRAM_ALGO" "$ZRAM_SIZE_PCT" "$VM_PROFILE" "$IO_SCHED" "$IO_READAHEAD_KB" "$ART_INLINE" "$USAP_POOL"
+  printf 'ZRAM %s %s%% | VM %s sw=%s | IO %s/%sKB | LMKD %s' \
+    "$ZRAM_ALGO" "$ZRAM_SIZE_PCT" "$VM_PROFILE" "$VM_SWAPPINESS" "$IO_SCHED" "$IO_READAHEAD_KB" "$LMKD_TUNING"
 }
 
 print_config_summary() {
+  local xposed_mod=""
+  xposed_mod=$(detect_xposed 2>/dev/null || true)
   print_msg "  - ZRAM         : ${ZRAM_ALGO} @ ${ZRAM_SIZE_PCT}% RAM"
-  print_msg "  - VM Writeback : ${VM_PROFILE}"
+  print_msg "  - VM Writeback : ${VM_PROFILE} (swappiness=${VM_SWAPPINESS})"
   print_msg "  - Storage Queue: ${IO_SCHED} / ${IO_READAHEAD_KB} KB read-ahead"
-  print_msg "  - ART Inlining : ${ART_INLINE}"
+  if [ -n "$xposed_mod" ]; then
+    print_msg "  - ART Inlining : managed by Xposed (${xposed_mod})"
+  else
+    print_msg "  - ART Inlining : ${ART_INLINE}"
+  fi
   print_msg "  - USAP Pool    : ${USAP_POOL}"
+  print_msg "  - LMKD Tuning  : ${LMKD_TUNING}"
 }
 
 detect_block_dev() {
@@ -248,7 +294,11 @@ apply_vm_io() {
 
   write_node /proc/sys/vm/page-cluster 0
   write_node /sys/kernel/mm/swap/vma_ra_enabled false
-  write_node /proc/sys/vm/swappiness 100
+  if [ -w /proc/sys/vm/swappiness ]; then
+    if ! printf '%s' "$VM_SWAPPINESS" > /proc/sys/vm/swappiness 2>/dev/null; then
+      printf '100' > /proc/sys/vm/swappiness 2>/dev/null || true
+    fi
+  fi
 
   case "$VM_PROFILE" in
     stock)
@@ -293,16 +343,14 @@ apply_vm_io() {
 generate_system_prop() {
   local moddir="$1"
   local tmp_prop="$moddir/system.prop.tmp.$$"
+  local xposed_mod=""
+  local ratio=4
 
   sanitize_config
-
-  if [ "$ART_INLINE" = "stock" ] && [ "$USAP_POOL" = "stock" ]; then
-    rm -f "$moddir/system.prop" "$tmp_prop"
-    return 0
-  fi
+  xposed_mod=$(detect_xposed 2>/dev/null || true)
 
   : > "$tmp_prop"
-  if [ "$ART_INLINE" = "enabled" ]; then
+  if [ "$ART_INLINE" = "enabled" ] && [ -z "$xposed_mod" ]; then
     printf 'dalvik.vm.dex2oat-flags=--inline-max-code-units=32\n' >> "$tmp_prop"
   fi
   if [ "$USAP_POOL" = "enabled" ]; then
@@ -310,7 +358,25 @@ generate_system_prop() {
     printf 'dalvik.vm.usap_pool_size_max=2\n' >> "$tmp_prop"
     printf 'dalvik.vm.usap_pool_size_min=1\n' >> "$tmp_prop"
   fi
-  mv -f "$tmp_prop" "$moddir/system.prop"
+  if [ "$LMKD_TUNING" = "enabled" ]; then
+    [ "$ZRAM_ALGO" = "lz4" ] && ratio=3 || ratio=4
+    cat >> "$tmp_prop" << EOF
+ro.lmk.swap_free_low_percentage=5
+ro.lmk.psi_partial_stall_ms=100
+ro.lmk.psi_complete_stall_ms=700
+ro.lmk.thrashing_limit=100
+ro.lmk.thrashing_limit_decay=10
+ro.lmk.kill_heaviest_task=true
+ro.lmk.swap_util_max=100
+ro.lmk.swap_compression_ratio=$ratio
+EOF
+  fi
+
+  if [ -s "$tmp_prop" ]; then
+    mv -f "$tmp_prop" "$moddir/system.prop"
+  else
+    rm -f "$moddir/system.prop" "$tmp_prop"
+  fi
 }
 
 detect_webui_app() {
@@ -447,17 +513,19 @@ prompt_choice() {
 
 run_custom_menu() {
   local start_idx=0
+  local xposed_mod=""
+  xposed_mod=$(detect_xposed 2>/dev/null || true)
 
   # 1. ZRAM Algorithm
   case "$ZRAM_ALGO" in zstd) start_idx=0 ;; lz4) start_idx=1 ;; esac
-  prompt_choice "[1/7] ZRAM Compression Algorithm:" "$start_idx" \
+  prompt_choice "[1] ZRAM Compression Algorithm:" "$start_idx" \
     "zstd (higher compression ratio, more multitasking headroom)" \
     "lz4 (lowest CPU swap latency)"
   case "$CHOICE_IDX" in 0) ZRAM_ALGO="zstd" ;; 1) ZRAM_ALGO="lz4" ;; esac
 
   # 2. ZRAM Size
   case "$ZRAM_SIZE_PCT" in 75) start_idx=0 ;; 100) start_idx=1 ;; 50) start_idx=2 ;; esac
-  prompt_choice "[2/7] ZRAM Size (% of RAM):" "$start_idx" \
+  prompt_choice "[2] ZRAM Size (% of RAM):" "$start_idx" \
     "75% (~2.8 GB)" \
     "100% (~3.7 GB)" \
     "50% (~1.85 GB stock)"
@@ -465,41 +533,61 @@ run_custom_menu() {
 
   # 3. VM Writeback Profile
   case "$VM_PROFILE" in responsive) start_idx=0 ;; aggressive) start_idx=1 ;; stock) start_idx=2 ;; esac
-  prompt_choice "[3/7] VM Writeback & Reclaim Profile:" "$start_idx" \
+  prompt_choice "[3] VM Writeback & Reclaim Profile:" "$start_idx" \
     "Responsive (16/64 MB dirty cap, vfs=55, watermark=25)" \
     "Aggressive (12/48 MB dirty cap, vfs=45, watermark=40)" \
     "Stock (10%/20% dirty ratios, vfs=100, watermark=10)"
   case "$CHOICE_IDX" in 0) VM_PROFILE="responsive" ;; 1) VM_PROFILE="aggressive" ;; 2) VM_PROFILE="stock" ;; esac
 
-  # 4. eMMC Scheduler
+  # 4. Swappiness
+  case "$VM_SWAPPINESS" in 130) start_idx=0 ;; 160) start_idx=1 ;; 100) start_idx=2 ;; esac
+  prompt_choice "[4] VM Swappiness:" "$start_idx" \
+    "130 (balanced ZRAM preference)" \
+    "160 (aggressive ZRAM / retain file cache)" \
+    "100 (stock)"
+  case "$CHOICE_IDX" in 0) VM_SWAPPINESS=130 ;; 1) VM_SWAPPINESS=160 ;; 2) VM_SWAPPINESS=100 ;; esac
+
+  # 5. eMMC Scheduler
   case "$IO_SCHED" in kyber) start_idx=0 ;; none) start_idx=1 ;; mq-deadline) start_idx=2 ;; esac
-  prompt_choice "[4/7] Storage I/O Scheduler:" "$start_idx" \
+  prompt_choice "[5] Storage I/O Scheduler:" "$start_idx" \
     "kyber (low-latency token scheduler)" \
     "none (passthrough, minimal CPU overhead)" \
     "mq-deadline (stock)"
   case "$CHOICE_IDX" in 0) IO_SCHED="kyber" ;; 1) IO_SCHED="none" ;; 2) IO_SCHED="mq-deadline" ;; esac
 
-  # 5. Read-Ahead
+  # 6. Read-Ahead
   case "$IO_READAHEAD_KB" in 128) start_idx=0 ;; 64) start_idx=1 ;; 256) start_idx=2 ;; esac
-  prompt_choice "[5/7] Storage Read-Ahead:" "$start_idx" \
+  prompt_choice "[6] Storage Read-Ahead:" "$start_idx" \
     "128 KB (balanced)" \
     "64 KB (lowest random read overhead)" \
     "256 KB (larger sequential read-ahead)"
   case "$CHOICE_IDX" in 0) IO_READAHEAD_KB=128 ;; 1) IO_READAHEAD_KB=64 ;; 2) IO_READAHEAD_KB=256 ;; esac
 
-  # 6. ART Method Inlining
-  case "$ART_INLINE" in enabled) start_idx=0 ;; stock) start_idx=1 ;; esac
-  prompt_choice "[6/7] ART dex2oat Method Inlining (reboot):" "$start_idx" \
-    "Enabled (--inline-max-code-units=32)" \
-    "Stock (--inline-max-code-units=0 / disabled)"
-  case "$CHOICE_IDX" in 0) ART_INLINE="enabled" ;; 1) ART_INLINE="stock" ;; esac
+  # 7. ART Method Inlining (skipped if Xposed active)
+  if [ -n "$xposed_mod" ]; then
+    print_msg ""
+    print_msg "[7] ART Method Inlining: managed by ${xposed_mod} (skipping to protect Xposed hooks)"
+  else
+    case "$ART_INLINE" in enabled) start_idx=0 ;; stock) start_idx=1 ;; esac
+    prompt_choice "[7] ART dex2oat Method Inlining (reboot):" "$start_idx" \
+      "Enabled (--inline-max-code-units=32)" \
+      "Stock (--inline-max-code-units=0 / disabled)"
+    case "$CHOICE_IDX" in 0) ART_INLINE="enabled" ;; 1) ART_INLINE="stock" ;; esac
+  fi
 
-  # 7. USAP Pool
+  # 8. USAP Pool
   case "$USAP_POOL" in enabled) start_idx=0 ;; stock) start_idx=1 ;; esac
-  prompt_choice "[7/7] USAP Pre-forked Zygote Pool (reboot):" "$start_idx" \
+  prompt_choice "[8] USAP Pre-forked Zygote Pool (reboot):" "$start_idx" \
     "Enabled (faster cold app launches, max 2 workers)" \
     "Stock (disabled)"
   case "$CHOICE_IDX" in 0) USAP_POOL="enabled" ;; 1) USAP_POOL="stock" ;; esac
+
+  # 9. LMKD Tuning
+  case "$LMKD_TUNING" in enabled) start_idx=0 ;; stock) start_idx=1 ;; esac
+  prompt_choice "[9] LMKD Multitasking Tuning (reboot):" "$start_idx" \
+    "Enabled (utilize ZRAM before killing cached apps)" \
+    "Stock (default Android LMKD strategy)"
+  case "$CHOICE_IDX" in 0) LMKD_TUNING="enabled" ;; 1) LMKD_TUNING="stock" ;; esac
 }
 
 run_interactive_menu() {
@@ -526,11 +614,11 @@ run_interactive_menu() {
       prompt_choice "Select Action / Preset:" 0 \
         "Keep current / Cancel (no changes)" \
         "Open WebUI (KsuWebUI / WebUI X)" \
-        "Multitasking (default) - zstd 75% | responsive | kyber | ART+USAP ON" \
-        "Low Latency - lz4 75% | responsive | none/64KB | ART+USAP ON" \
-        "Max Capacity - zstd 100% | aggressive | kyber | ART+USAP ON" \
-        "Stock - lz4 50% | stock VM | mq-deadline | ART+USAP OFF" \
-        "Custom (configure all 7 options individually)"
+        "Multitasking (default) - zstd 75% | sw=130 | kyber | LMKD+USAP" \
+        "Low Latency - lz4 75% | sw=100 | none/64KB | LMKD+USAP" \
+        "Max Capacity - zstd 100% | sw=160 | kyber | LMKD+USAP" \
+        "Stock - lz4 50% | sw=100 | mq-deadline | Stock" \
+        "Custom (configure all options individually)"
       case "$CHOICE_IDX" in
         0) MENU_CHANGED=0; return 0 ;;
         1)
@@ -548,11 +636,11 @@ run_interactive_menu() {
     else
       prompt_choice "Select Action / Preset:" 0 \
         "Keep current / Cancel (no changes)" \
-        "Multitasking (default) - zstd 75% | responsive | kyber | ART+USAP ON" \
-        "Low Latency - lz4 75% | responsive | none/64KB | ART+USAP ON" \
-        "Max Capacity - zstd 100% | aggressive | kyber | ART+USAP ON" \
-        "Stock - lz4 50% | stock VM | mq-deadline | ART+USAP OFF" \
-        "Custom (configure all 7 options individually)"
+        "Multitasking (default) - zstd 75% | sw=130 | kyber | LMKD+USAP" \
+        "Low Latency - lz4 75% | sw=100 | none/64KB | LMKD+USAP" \
+        "Max Capacity - zstd 100% | sw=160 | kyber | LMKD+USAP" \
+        "Stock - lz4 50% | sw=100 | mq-deadline | Stock" \
+        "Custom (configure all options individually)"
       case "$CHOICE_IDX" in
         0) MENU_CHANGED=0; return 0 ;;
         1) apply_preset multitasking ;;
@@ -565,11 +653,11 @@ run_interactive_menu() {
   elif [ "${HAS_EXISTING_CONFIG:-0}" -eq 1 ]; then
     prompt_choice "Select Configuration Preset:" 0 \
       "Keep existing (${existing_summary})" \
-      "Multitasking (default) - zstd 75% | responsive | kyber | ART+USAP ON" \
-      "Low Latency - lz4 75% | responsive | none/64KB | ART+USAP ON" \
-      "Max Capacity - zstd 100% | aggressive | kyber | ART+USAP ON" \
-      "Stock - lz4 50% | stock VM | mq-deadline | ART+USAP OFF" \
-      "Custom (configure all 7 options individually)"
+      "Multitasking (default) - zstd 75% | sw=130 | kyber | LMKD+USAP" \
+      "Low Latency - lz4 75% | sw=100 | none/64KB | LMKD+USAP" \
+      "Max Capacity - zstd 100% | sw=160 | kyber | LMKD+USAP" \
+      "Stock - lz4 50% | sw=100 | mq-deadline | Stock" \
+      "Custom (configure all options individually)"
     case "$CHOICE_IDX" in
       0) ;;
       1) apply_preset multitasking ;;
@@ -580,11 +668,11 @@ run_interactive_menu() {
     esac
   else
     prompt_choice "Select Configuration Preset:" 0 \
-      "Multitasking (default) - zstd 75% | responsive | kyber | ART+USAP ON" \
-      "Low Latency - lz4 75% | responsive | none/64KB | ART+USAP ON" \
-      "Max Capacity - zstd 100% | aggressive | kyber | ART+USAP ON" \
-      "Stock - lz4 50% | stock VM | mq-deadline | ART+USAP OFF" \
-      "Custom (configure all 7 options individually)"
+      "Multitasking (default) - zstd 75% | sw=130 | kyber | LMKD+USAP" \
+      "Low Latency - lz4 75% | sw=100 | none/64KB | LMKD+USAP" \
+      "Max Capacity - zstd 100% | sw=160 | kyber | LMKD+USAP" \
+      "Stock - lz4 50% | sw=100 | mq-deadline | Stock" \
+      "Custom (configure all options individually)"
     case "$CHOICE_IDX" in
       0) apply_preset multitasking ;;
       1) apply_preset lowlatency ;;

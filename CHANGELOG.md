@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.1 (versionCode 110)
+
+- **Xposed / Vector Auto-Detection**: Automatically detects active `zygisk_vector`, `zygisk_lsposed`, or `riru_lsposed` modules and leaves `dalvik.vm.dex2oat-flags` untouched so Xposed hooks stay intact without triggering false `Reboot Pending` alerts.
+- **VM Swappiness Control**: Added live customizable `vm.swappiness` (`100` / `130` / `160`) to take full advantage of ~`4×` `zstd` ZRAM compression before evicting clean file cache.
+- **LMKD Multitasking Tuning**: Added boot-time `ro.lmk.*` tuning (`swap_free_low_percentage=5`, `psi_partial_stall_ms=100`, `psi_complete_stall_ms=700`, `thrashing_limit=100`, `swap_compression_ratio=3|4`) so Android utilizes expanded ZRAM before killing cached apps.
+- **On-Demand eMMC Trim**: Added `action.sh --fstrim` and WebUI **Trim eMMC** button (`/data` and `/cache`).
+- **Improved Pending-Reboot UX**: WebUI now displays the exact `BOOT_PENDING_REASONS` and includes a two-step confirmation **Reboot Now** button (`action.sh --reboot`).
+
 ## v1.0 (versionCode 100)
 
 - Initial release targeting MediaTek MT8188 / 4 GB RAM + eMMC devices (verified on Amazon Fire Max 11 `sunstone` / `KFSNWI`).
